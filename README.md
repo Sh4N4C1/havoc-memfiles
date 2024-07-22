@@ -4,7 +4,6 @@
 
 <p align="center">
 <img src="https://raw.githubusercontent.com/Sh4N4C1/gitbook/main/images/memfiles1.png" alt="memfiles">
-<img src="https://raw.githubusercontent.com/Sh4N4C1/gitbook/main/images/memfiles2.png" alt="memfiles">
 </p>
 
 All work by the talented [Octoberfest7](https://github.com/Octoberfest7)
