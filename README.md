@@ -10,9 +10,9 @@ All work by the talented [Octoberfest7](https://github.com/Octoberfest7)
 
 This project is basically based on [memFiles](https://github.com/Octoberfest7/memFiles)
 
-Details are all at [memFiles](https://github.com/Octoberfest7/memFiles) , I'm just trying to port to Havoc c&c
+Details are all at [memFiles](https://github.com/Octoberfest7/memFiles), I'm just trying to port to Havoc c&c.
 
-Note that in my experiments it can be extremely *unstable*
+Note that in my experiments it can be extremely *unstable*, and i changed `redteam` str to `Temp`, which means the fake file path must contain Temp.
 
 ## Install
 
