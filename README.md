@@ -19,8 +19,14 @@ Note that in my experiments it can be extremely *unstable*, and i changed `redte
 ```bash
 git clone https://github.com/Octoberfest7/memFiles
 make
+```
 
+## Usage
+
+```bash
 meminit
-...
-memdumpclean
+comsvcsdump C:\Windows\Temp\testdump.dmp
+memlist
+memfetch force
+memclean
 ```
